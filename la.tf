@@ -2,16 +2,13 @@
 variable "ses_sender_email" {
   description = "Email address to send employee credentials from (must be verified in SES)"
   type        = string
-  default     = "549500@student.fontys.nl" # Change this to your email
+  default     = "549500@student.fontys.nl"
 }
 
 # ==================== SES EMAIL IDENTITY ====================
 resource "aws_ses_email_identity" "sender" {
   email = var.ses_sender_email
 }
-
-# Note: You must verify this email address in AWS SES Console
-# AWS will send a verification email to this address
 
 # ==================== IAM ROLE FOR LAMBDA ====================
 resource "aws_iam_role" "lambda_provisioning" {
@@ -41,7 +38,7 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-# Lambda VPC execution policy (for private subnet access)
+# Lambda VPC execution policy
 resource "aws_iam_role_policy_attachment" "lambda_vpc" {
   role       = aws_iam_role.lambda_provisioning.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
@@ -92,23 +89,6 @@ resource "aws_iam_role_policy" "lambda_permissions" {
         Action = [
           "ses:SendEmail",
           "ses:SendRawEmail"
-        ]
-        Resource = "*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "ds:DescribeDirectories",
-          "ds:CreateUser",
-          "ds:ResetUserPassword",
-          "ds:AddTagsToResource"
-        ]
-        Resource = "*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "secretsmanager:GetSecretValue"
         ]
         Resource = "*"
       }
@@ -182,11 +162,6 @@ resource "aws_lambda_function" "user_provisioning" {
       SECURITY_GROUP_ID  = aws_security_group.virtual_desktop.id
       AMI_ID             = data.aws_ami.ubuntu_desktop.id
       KEY_NAME           = var.key_pair_name
-      AD_DIRECTORY_ID    = aws_directory_service_directory.main.id
-      AD_DOMAIN_NAME     = aws_directory_service_directory.main.name
-      AD_DNS_IP_1        = aws_directory_service_directory.main.dns_ip_addresses[0]
-      AD_DNS_IP_2        = aws_directory_service_directory.main.dns_ip_addresses[1]
-      AD_ADMIN_PASSWORD  = var.ad_admin_password
     }
   }
 
