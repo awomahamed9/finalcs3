@@ -162,6 +162,7 @@ resource "aws_lambda_function" "user_provisioning" {
       SECURITY_GROUP_ID  = aws_security_group.virtual_desktop.id
       AMI_ID             = data.aws_ami.ubuntu_desktop.id
       KEY_NAME           = var.key_pair_name
+      IAM_INSTANCE_PROFILE   = "cs3-nca-virtual-desktop-profile"
     }
   }
 
