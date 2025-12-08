@@ -1,11 +1,12 @@
 # ==================== APPLICATION LOAD BALANCER ====================
 
-# Target Group for HR Portal
+# Target Group for HR Portal (ECS Fargate)
 resource "aws_lb_target_group" "hr_portal" {
-  name     = "${var.project_name}-hr-portal-tg"
-  port     = 3000
-  protocol = "HTTP"
-  vpc_id   = aws_vpc.main.id
+  name        = "${var.project_name}-hr-portal-tg"
+  port        = 3000
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.main.id
+  target_type = "ip"  # Required for Fargate
 
   health_check {
     enabled             = true
@@ -24,12 +25,7 @@ resource "aws_lb_target_group" "hr_portal" {
   }
 }
 
-# Register HR Portal instance to target group
-resource "aws_lb_target_group_attachment" "hr_portal" {
-  target_group_arn = aws_lb_target_group.hr_portal.arn
-  target_id        = aws_instance.hr_portal.id
-  port             = 3000
-}
+# ECS service automatically registers tasks to target group
 
 # Application Load Balancer
 resource "aws_lb" "main" {

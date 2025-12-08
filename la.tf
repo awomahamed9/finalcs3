@@ -145,7 +145,7 @@ resource "aws_lambda_function" "user_provisioning" {
   handler          = "user_provisioning.lambda_handler"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
   runtime          = "python3.11"
-  timeout          = 300  # 5 minutes
+  timeout          = 300 # 5 minutes
   memory_size      = 256
 
   vpc_config {
@@ -155,14 +155,14 @@ resource "aws_lambda_function" "user_provisioning" {
 
   environment {
     variables = {
-      DYNAMODB_TABLE     = aws_dynamodb_table.employees.name
-      SES_SENDER_EMAIL   = var.ses_sender_email
-      OPENVPN_SERVER_IP  = aws_eip.openvpn.public_ip
-      SUBNET_ID          = aws_subnet.private_web_a.id
-      SECURITY_GROUP_ID  = aws_security_group.virtual_desktop.id
-      AMI_ID             = data.aws_ami.ubuntu_desktop.id
-      KEY_NAME           = var.key_pair_name
-      IAM_INSTANCE_PROFILE   = "cs3-nca-virtual-desktop-profile"
+      DYNAMODB_TABLE       = aws_dynamodb_table.employees.name
+      SES_SENDER_EMAIL     = var.ses_sender_email
+      OPENVPN_SERVER_IP    = aws_eip.openvpn.public_ip
+      SUBNET_ID            = aws_subnet.private_web_a.id
+      SECURITY_GROUP_ID    = aws_security_group.virtual_desktop.id
+      AMI_ID               = data.aws_ami.ubuntu_desktop.id
+      KEY_NAME             = var.key_pair_name
+      IAM_INSTANCE_PROFILE = "cs3-nca-virtual-desktop-profile"
     }
   }
 
@@ -176,7 +176,7 @@ resource "aws_lambda_event_source_mapping" "dynamodb_stream" {
   event_source_arn  = aws_dynamodb_table.employees.stream_arn
   function_name     = aws_lambda_function.user_provisioning.arn
   starting_position = "LATEST"
-  
+
   filter_criteria {
     filter {
       pattern = jsonencode({
