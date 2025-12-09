@@ -172,8 +172,8 @@ resource "aws_instance" "ad_automation" {
   user_data = base64encode(templatefile("${path.module}/scripts/ad_automation_userdata.ps1", {
     directory_id   = aws_directory_service_directory.main.id
     directory_name = aws_directory_service_directory.main.name
-    dns_ip_1       = aws_directory_service_directory.main.dns_ip_addresses[0]
-    dns_ip_2       = aws_directory_service_directory.main.dns_ip_addresses[1]
+    dns_ip_1       = tolist(aws_directory_service_directory.main.dns_ip_addresses)[0]
+    dns_ip_2       = tolist(aws_directory_service_directory.main.dns_ip_addresses)[1]
     secret_arn     = aws_secretsmanager_secret.ad_admin.arn
     sqs_queue_url  = aws_sqs_queue.ad_user_provisioning.url
     aws_region     = "eu-central-1"
