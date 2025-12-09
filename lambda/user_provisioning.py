@@ -3,6 +3,7 @@ import boto3
 import os
 import random
 import string
+import base64
 from datetime import datetime
 
 # AWS clients
@@ -19,12 +20,8 @@ OPENVPN_SERVER_IP = os.environ['OPENVPN_SERVER_IP']
 SUBNET_ID = os.environ['SUBNET_ID']
 SECURITY_GROUP_ID = os.environ['SECURITY_GROUP_ID']
 AD_CLIENT_SG_ID = os.environ['AD_CLIENT_SG_ID']
-AMI_ID = os.environ['AMI_ID']
 KEY_NAME = os.environ['KEY_NAME']
 IAM_INSTANCE_PROFILE = os.environ.get('IAM_INSTANCE_PROFILE', 'cs3-nca-virtual-desktop-profile')
-AD_DOMAIN = "innovatech.local"
-AD_DNS_1 = "10.0.11.44"
-AD_DNS_2 = "10.0.12.42"
 
 def lambda_handler(event, context):
     print(f"Received event: {json.dumps(event)}")
@@ -51,39 +48,36 @@ def lambda_handler(event, context):
                 password = generate_password()
                 print(f"Generated password for {username}")
                 
-                # Step 1: Publish to SNS for AD user creation
-                message = {
-                    'employee_id': employee_id,
-                    'name': name,
-                    'username': username,
-                    'password': password,
-                    'email': email,
-                    'role': role,
-                    'department': department
-                }
-                
+                # Publish to SNS for AD user creation
                 sns.publish(
                     TopicArn=SNS_TOPIC_ARN,
-                    Message=json.dumps(message),
+                    Message=json.dumps({
+                        'employee_id': employee_id,
+                        'name': name,
+                        'username': username,
+                        'password': password,
+                        'email': email,
+                        'role': role,
+                        'department': department
+                    }),
                     Subject=f'Create AD User: {username}'
                 )
+                print(f"✅ Published to SNS for {username}")
                 
-                print(f"✅ Published message to SNS for {username}")
-                
-                # Step 2: Launch domain-joined virtual desktop
-                instance_id, private_ip = launch_virtual_desktop(
+                # Launch Windows virtual desktop
+                instance_id, private_ip = launch_windows_desktop(
                     employee_id, name, username, department, role
                 )
                 
                 if not instance_id:
-                    raise Exception(f"Failed to launch EC2 instance for {username}")
+                    raise Exception(f"Failed to launch Windows desktop for {username}")
                 
-                print(f"✅ Launched EC2: {instance_id} ({private_ip})")
+                print(f"✅ Launched Windows desktop: {instance_id} ({private_ip})")
                 
-                # Step 3: Send credentials email
+                # Send credentials email
                 send_credentials_email(name, email, username, password, private_ip, role)
                 
-                # Step 4: Update employee status
+                # Update employee status
                 update_employee_status(
                     employee_id,
                     processed=True,
@@ -95,7 +89,7 @@ def lambda_handler(event, context):
                 return {
                     'statusCode': 200,
                     'body': json.dumps({
-                        'message': f'Successfully provisioned desktop for {username}',
+                        'message': f'Successfully provisioned Windows desktop for {username}',
                         'employee_id': employee_id,
                         'instance_id': instance_id
                     })
@@ -117,126 +111,126 @@ def generate_password(length=12):
         password = password[:-1] + random.choice(string.digits)
     return password
 
-def launch_virtual_desktop(employee_id, name, username, department, role):
-    """Launch domain-joined EC2 virtual desktop"""
+def launch_windows_desktop(employee_id, name, username, department, role):
+    """Launch Windows domain-joined virtual desktop with RBAC and Fixes"""
     try:
-        # User data script for domain join
-       user_data = f"""#!/bin/bash
-set -e
+        # PowerShell user-data script
+        # Includes ALL previous fixes (DNS, NLA, Retry Loops) + New RBAC Logic
+        user_data_script = f"""<powershell>
+Start-Transcript -Path "C:\\ProgramData\\Amazon\\EC2Launch\\log\\user-data-transcript.log"
 
-# Log everything
-exec > >(tee /var/log/user-data.log)
-exec 2>&1
+Write-Host "=== Starting Windows Desktop Setup for {username} ==="
 
-echo "=== Starting Virtual Desktop Setup for {username} ==="
+# 1. FIX: Configure DNS (Crucial for Domain Join)
+$adapter = Get-NetAdapter | Where-Object {{ $_.Status -eq "Up" }} | Select-Object -First 1
+Set-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -ServerAddresses "10.0.11.44","10.0.12.42"
+Write-Host "DNS Configured"
 
-# Update system
-apt-get update
-DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
-
-# Install desktop environment
-DEBIAN_FRONTEND=noninteractive apt-get install -y xfce4 xfce4-goodies xrdp
-
-# Install realmd for domain join
-DEBIAN_FRONTEND=noninteractive apt-get install -y realmd sssd sssd-tools adcli krb5-user packagekit samba-common-bin
-
-# Configure DNS to AD (don't use chattr - not supported on EC2)
-cat > /etc/resolv.conf << EOF
-nameserver {AD_DNS_1}
-nameserver {AD_DNS_2}
-search {AD_DOMAIN}
-EOF
-
-# Prevent NetworkManager from overwriting resolv.conf
-cat > /etc/NetworkManager/conf.d/dns.conf << EOF
-[main]
-dns=none
-EOF
-systemctl restart NetworkManager || true
-
-# Configure xrdp
-systemctl enable xrdp
-systemctl start xrdp
-
-# Allow RDP through firewall
-ufw allow 3389/tcp || true
-ufw --force enable || true
-
-# Wait for AD to be reachable (fixed bash syntax)
-echo "Waiting for AD..."
-for i in $(seq 1 30); do
-    if ping -c 1 {AD_DNS_1} &> /dev/null; then
-        echo "AD is reachable!"
+# 2. FIX: Wait for AD Connectivity
+$ready = $false
+for ($i=1; $i -le 30; $i++) {{
+    if (Test-NetConnection -ComputerName 10.0.11.44 -Port 389 -InformationLevel Quiet) {{
+        $ready = $true
         break
-    fi
-    echo "Attempt $i/30..."
-    sleep 10
-done
+    }}
+    Start-Sleep -Seconds 10
+}}
 
-# Discover and join domain
-echo "Discovering domain..."
-realm discover {AD_DOMAIN}
+if ($ready) {{
+    Write-Host "Joining domain..."
+    $password = ConvertTo-SecureString "Student123" -AsPlainText -Force
+    $credential = New-Object System.Management.Automation.PSCredential("Admin@innovatech.local", $password)
+    
+    try {{
+        # A. Join Domain
+        Add-Computer -DomainName "innovatech.local" -Credential $credential -Force
+        
+        # --- RBAC & REALISM LOGIC ---
+        Write-Host "Applying Department Policy: {department}"
+        
+        # General: Create Info folder for everyone
+        New-Item -Path "C:\\" -Name "CompanyData" -ItemType "directory" -ErrorAction SilentlyContinue
+        Set-Content -Path "C:\\CompanyData\\UserContext.txt" -Value "User: {username}`r`nRole: {role}`r`nDept: {department}"
 
-echo "Joining domain..."
-echo "InnovatechAD2024!" | realm join --user=Admin {AD_DOMAIN}
+        if ("{department}" -eq "HR") {{
+            # HR CONFIGURATION
+            Write-Host "Setting up HR Environment..."
+            
+            # 1. Create Confidential Folder
+            New-Item -Path "C:\\" -Name "HR_Confidential" -ItemType "directory"
+            Set-Content -Path "C:\\HR_Confidential\\Payroll_Templates.txt" -Value "Confidential Payroll Data"
+            
+            # 2. Add Security Policy to Desktop (Visual "Realism")
+            $desktopPath = "C:\\Users\\Public\\Desktop\\IT_Security_Policy.txt"
+            $policyText = "WARNING: RESTRICTED ACCESS`r`n`r`nAs an HR employee, you are restricted from installing unauthorized software.`r`nAll activity is monitored.`r`n`r`n- IT Security"
+            Set-Content -Path $desktopPath -Value $policyText
+            
+            # 3. Dummy Application
+            Set-Content -Path "C:\\Users\\Public\\Desktop\\Payroll_App.lnk" -Value "Dummy Link"
+        }}
+        elseif ("{department}" -eq "IT") {{
+            # IT CONFIGURATION
+            Write-Host "Setting up IT Environment..."
+            
+            # 1. Install Admin Tools (Real Feature!)
+            Install-WindowsFeature RSAT-AD-PowerShell -IncludeAllSubFeature
+            
+            # 2. Create Scripts Folder
+            New-Item -Path "C:\\" -Name "AdminScripts" -ItemType "directory"
+            Set-Content -Path "C:\\AdminScripts\\readme.txt" -Value "PowerShell Admin Tools Installed"
+        }}
+        else {{
+            # STANDARD USER
+            Write-Host "Standard Setup Applied"
+            Set-Content -Path "C:\\Users\\Public\\Desktop\\Welcome.txt" -Value "Welcome to Innovatech!"
+        }}
+        # ---------------------------
 
-# Verify domain join
-realm list
+        # B. FIX: Disable NLA (Fixes 0x2407 error)
+        (Get-WmiObject -class "Win32_TSGeneralSetting" -Namespace root\\cimv2\\terminalservices -Filter "TerminalName='RDP-tcp'").SetUserAuthenticationRequired(0)
 
-# Configure SSSD for domain authentication
-cat > /etc/sssd/sssd.conf << EOF
-[sssd]
-domains = {AD_DOMAIN}
-config_file_version = 2
-services = nss, pam
+        # C. FIX: Grant RDP Access (Retry loop)
+        for ($k=1; $k -le 5; $k++) {{
+            try {{
+                Add-LocalGroupMember -Group "Remote Desktop Users" -Member "innovatech\\Domain Users" -ErrorAction Stop
+                Write-Host "Success: Domain Users added to RDP group."
+                break
+            }} catch {{
+                Start-Sleep -Seconds 5
+            }}
+        }}
 
-[domain/{AD_DOMAIN}]
-default_shell = /bin/bash
-krb5_store_password_if_offline = True
-cache_credentials = True
-krb5_realm = {AD_DOMAIN.upper()}
-id_provider = ad
-fallback_homedir = /home/%u
-ad_domain = {AD_DOMAIN}
-use_fully_qualified_names = False
-ldap_id_mapping = True
-access_provider = ad
-EOF
+        # D. Restart
+        Restart-Computer -Force
+        
+    }} catch {{
+        Write-Host "CRITICAL ERROR: $_"
+    }}
+}}
 
-chmod 600 /etc/sssd/sssd.conf
-systemctl enable sssd
-systemctl restart sssd
-
-# Configure PAM for home directory creation
-pam-auth-update --enable mkhomedir
-
-# Create welcome file
-cat > /etc/skel/WELCOME.txt << 'WELCOME'
-========================================
-INNOVATECH VIRTUAL DESKTOP
-========================================
-
-Employee: {name}
-Username: {username}
-Role: {role}
-Department: {department}
-
-This desktop is domain-joined to {AD_DOMAIN}
-
-Log in with your domain credentials:
-Username: {username}
-Password: (sent to your email)
-
-For support: it@innovatech.com
-========================================
-WELCOME
-
-echo "=== ✅ Setup completed successfully for {username} ==="
+Stop-Transcript
+</powershell>
+<persist>true</persist>
 """
+        # FIX: Base64 Encode (Required for Windows)
+        encoded_user_data = base64.b64encode(user_data_script.encode("ascii")).decode("ascii")
 
-        # Launch instance
+        # Get AMI
+        print("Finding Windows Server 2022 AMI...")
+        windows_images = ec2.describe_images(
+            Owners=['amazon'],
+            Filters=[
+                {'Name': 'name', 'Values': ['Windows_Server-2022-English-Full-Base-*']},
+                {'Name': 'state', 'Values': ['available']}
+            ]
+        )['Images']
+        
+        windows_images.sort(key=lambda x: x['CreationDate'], reverse=True)
+        ami_id = windows_images[0]['ImageId']
+        
+        # Launch
         response = ec2.run_instances(
-            ImageId=AMI_ID,
+            ImageId=ami_id,
             InstanceType='t3.medium',
             KeyName=KEY_NAME,
             IamInstanceProfile={'Name': IAM_INSTANCE_PROFILE},
@@ -248,15 +242,16 @@ echo "=== ✅ Setup completed successfully for {username} ==="
                 'AssociatePublicIpAddress': False,
                 'Groups': [SECURITY_GROUP_ID, AD_CLIENT_SG_ID]
             }],
-            UserData=user_data,
+            UserData=encoded_user_data,
             TagSpecifications=[{
                 'ResourceType': 'instance',
                 'Tags': [
-                    {'Key': 'Name', 'Value': f'virtual-desktop-{username}'},
+                    {'Key': 'Name', 'Value': f'windows-desktop-{username}'},
                     {'Key': 'Employee', 'Value': name},
                     {'Key': 'EmployeeId', 'Value': employee_id},
                     {'Key': 'Department', 'Value': department},
                     {'Key': 'Role', 'Value': role},
+                    {'Key': 'OS', 'Value': 'Windows'},
                     {'Key': 'DomainJoined', 'Value': 'True'},
                     {'Key': 'Project', 'Value': 'cs3-nca'}
                 ]
@@ -264,7 +259,7 @@ echo "=== ✅ Setup completed successfully for {username} ==="
             BlockDeviceMappings=[{
                 'DeviceName': '/dev/sda1',
                 'Ebs': {
-                    'VolumeSize': 30,
+                    'VolumeSize': 50,
                     'VolumeType': 'gp3',
                     'DeleteOnTermination': True,
                     'Encrypted': True
@@ -275,19 +270,21 @@ echo "=== ✅ Setup completed successfully for {username} ==="
         instance_id = response['Instances'][0]['InstanceId']
         private_ip = response['Instances'][0]['PrivateIpAddress']
         
-        print(f"Launched domain-joined instance: {instance_id} at {private_ip}")
+        print(f"Launched Windows desktop: {instance_id} at {private_ip}")
         return instance_id, private_ip
         
     except Exception as e:
-        print(f"Error launching instance: {str(e)}")
+        print(f"Error launching Windows desktop: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return None, None
 
 def send_credentials_email(name, email, username, password, private_ip, role):
-    """Send welcome email with AD credentials"""
+    """Send welcome email with Windows desktop credentials"""
     try:
         first_name = name.split()[0]
         
-        subject = f"Welcome to Innovatech - Your Domain Account & Virtual Desktop"
+        subject = "Welcome to Innovatech - Your Windows Desktop"
         
         html_body = f"""<html>
 <head>
@@ -307,19 +304,19 @@ body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
 <div class="container">
   <div class="header">
     <h1>Welcome to Innovatech!</h1>
-    <p>Your domain account and virtual desktop are ready</p>
+    <p>Your Windows desktop is ready</p>
   </div>
   
   <div class="content">
     <p>Hi {first_name},</p>
     
-    <p>Your Active Directory account and domain-joined virtual desktop have been provisioned.</p>
+    <p>Your Windows virtual desktop has been provisioned and is being joined to the innovatech.local domain.</p>
     
     <div class="credentials">
-      <h3>Your Domain Credentials</h3>
+      <h3>Your Login Credentials</h3>
       <div class="credential-item">
         <span class="label">Domain:</span>
-        <span class="value">{AD_DOMAIN}</span>
+        <span class="value">innovatech.local</span>
       </div>
       <div class="credential-item">
         <span class="label">Username:</span>
@@ -340,21 +337,30 @@ body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
     </div>
     
     <div class="warning">
-      <strong>⚠️ Important:</strong> Your desktop is domain-joined. It may take 10-15 minutes to fully provision and join the domain.
+      <strong>⚠️ Important:</strong> Your Windows desktop takes 10-15 minutes to boot and join the domain. Please wait before connecting.
     </div>
     
     <h3>How to Connect:</h3>
     <ol>
-      <li><strong>Connect to VPN first</strong> (contact IT for VPN config)</li>
-      <li><strong>Open Remote Desktop client</strong></li>
-      <li><strong>Server:</strong> {private_ip}:3389</li>
-      <li><strong>Login with:</strong>
+      <li><strong>Connect to VPN first</strong> (contact IT for VPN config file)</li>
+      <li><strong>Open Remote Desktop:</strong>
         <ul>
-          <li>Username: <code>{username}</code> (or <code>{username}@{AD_DOMAIN}</code>)</li>
+          <li>Windows: Search for "Remote Desktop Connection"</li>
+          <li>Mac: Download "Microsoft Remote Desktop" from App Store</li>
+        </ul>
+      </li>
+      <li><strong>Computer:</strong> {private_ip}</li>
+      <li><strong>Login options:</strong>
+        <ul>
+          <li>Username: <code>{username}</code></li>
+          <li>Or: <code>innovatech\\{username}</code></li>
+          <li>Or: <code>{username}@innovatech.local</code></li>
           <li>Password: <code>{password}</code></li>
         </ul>
       </li>
     </ol>
+    
+    <p><strong>First Login:</strong> You can change your password after first login using Ctrl+Alt+End → Change Password</p>
     
     <p>Questions? Contact IT: <a href="mailto:it@innovatech.com">it@innovatech.com</a></p>
     
@@ -369,27 +375,30 @@ body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
 
 Hi {first_name},
 
-Your Active Directory account and domain-joined virtual desktop are ready.
+Your Windows virtual desktop is ready!
 
-DOMAIN CREDENTIALS:
-Domain: {AD_DOMAIN}
+CREDENTIALS:
+Domain: innovatech.local
 Username: {username}
 Password: {password}
-Desktop IP: {private_ip}:3389
-VPN Server: {OPENVPN_SERVER_IP}
+Desktop: {private_ip}:3389
+VPN: {OPENVPN_SERVER_IP}
 
-IMPORTANT: Desktop may take 10-15 minutes to fully provision.
+IMPORTANT: Wait 10-15 minutes for Windows to boot and join domain.
 
 HOW TO CONNECT:
 1. Connect to VPN first
-2. Open Remote Desktop client
-3. Server: {private_ip}:3389
-4. Login: {username} / {password}
+2. Open Remote Desktop
+3. Computer: {private_ip}
+4. Login: {username} or innovatech\\{username}
+5. Password: {password}
 
-Questions? Contact IT: it@innovatech.com
+You can change your password after first login (Ctrl+Alt+End).
 
-Welcome aboard!
-The Innovatech IT Team
+Questions? IT: it@innovatech.com
+
+Welcome!
+Innovatech IT Team
 """
         
         ses.send_email(
