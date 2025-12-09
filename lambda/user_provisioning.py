@@ -21,6 +21,8 @@ AMI_ID = os.environ['AMI_ID']
 KEY_NAME = os.environ['KEY_NAME']
 IAM_INSTANCE_PROFILE = os.environ.get('IAM_INSTANCE_PROFILE', 'cs3-nca-virtual-desktop-profile')
 
+AD_CLIENT_SG_ID = os.environ['AD_CLIENT_SG_ID']  # Add at top with other env vars
+
 def lambda_handler(event, context):
     print(f"Received event: {json.dumps(event)}")
     

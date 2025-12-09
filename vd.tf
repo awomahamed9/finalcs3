@@ -44,7 +44,7 @@ resource "aws_iam_role_policy" "virtual_desktop_domain_join" {
         Effect = "Allow"
         Action = [
           "ds:DescribeDirectories",
-          "secretsmanager:GetSecretValue"  # For service account creds
+          "secretsmanager:GetSecretValue" # For service account creds
         ]
         Resource = "*"
       }

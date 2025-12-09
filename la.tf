@@ -94,19 +94,27 @@ resource "aws_iam_role_policy" "lambda_permissions" {
       },
 
       # Add to la.tf in aws_iam_role_policy
-{
-  Effect = "Allow"
-  Action = [
-    "ds:DescribeDirectories",
-    "ssm:SendCommand",           # If using SSM for domain join
-    "ssm:GetCommandInvocation"
-  ]
-  Resource = "*"
-}
+      {
+        Effect = "Allow"
+        Action = [
+          "ds:DescribeDirectories",
+          "ssm:SendCommand", # If using SSM for domain join
+          "ssm:GetCommandInvocation"
+        ]
+        Resource = "*"
+      },
 
-      
+      {
+        Effect = "Allow"
+        Action = [
+          "sns:Publish"
+        ]
+        Resource = aws_sns_topic.ad_user_provisioning.arn
+      }
 
-      
+
+
+
     ]
   })
 }
@@ -175,6 +183,8 @@ resource "aws_lambda_function" "user_provisioning" {
       OPENVPN_SERVER_IP    = aws_eip.openvpn.public_ip
       SUBNET_ID            = aws_subnet.private_web_a.id
       SECURITY_GROUP_ID    = aws_security_group.virtual_desktop.id
+      AD_CLIENT_SG_ID      = aws_security_group.ad_client.id
+      SNS_TOPIC_ARN        = aws_sns_topic.ad_user_provisioning.arn
       AMI_ID               = data.aws_ami.ubuntu_desktop.id
       KEY_NAME             = var.key_pair_name
       IAM_INSTANCE_PROFILE = "cs3-nca-virtual-desktop-profile"

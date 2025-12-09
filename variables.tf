@@ -15,3 +15,12 @@ variable "my_ip_cidr" {
 variable "key_pair_name" {
   default = "case3-keypair"
 }
+
+# Add to variables.tf:
+
+variable "ad_admin_password" {
+  description = "Admin password for AWS Managed AD (min 8 chars, complexity required)"
+  type        = string
+  default     = "Student123" # Change this!
+  sensitive   = true
+}

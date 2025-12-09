@@ -21,7 +21,7 @@ resource "aws_ecr_repository" "hr_portal" {
     scan_on_push = true
   }
 
-  
+
 
   tags = {
     Name = "${var.project_name}-hr-portal-ecr"
