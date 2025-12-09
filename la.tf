@@ -91,7 +91,22 @@ resource "aws_iam_role_policy" "lambda_permissions" {
           "ses:SendRawEmail"
         ]
         Resource = "*"
-      }
+      },
+
+      # Add to la.tf in aws_iam_role_policy
+{
+  Effect = "Allow"
+  Action = [
+    "ds:DescribeDirectories",
+    "ssm:SendCommand",           # If using SSM for domain join
+    "ssm:GetCommandInvocation"
+  ]
+  Resource = "*"
+}
+
+      
+
+      
     ]
   })
 }

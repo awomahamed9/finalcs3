@@ -190,6 +190,98 @@ resource "aws_security_group" "grafana" {
   }
 }
 
+# YOU NEED TO ADD THIS to sg.tf
+
+# Security group for AD communication
+resource "aws_security_group" "ad_client" {
+  name        = "${var.project_name}-ad-client-sg"
+  description = "Allow AD/LDAP/Kerberos traffic to domain controllers"
+  vpc_id      = aws_vpc.main.id
+
+  # DNS
+  egress {
+    description = "DNS to AD"
+    from_port   = 53
+    to_port     = 53
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/16"]  # Your VPC CIDR
+  }
+
+  egress {
+    description = "DNS to AD (UDP)"
+    from_port   = 53
+    to_port     = 53
+    protocol    = "udp"
+    cidr_blocks = ["10.0.0.0/16"]
+  }
+
+  # Kerberos
+  egress {
+    description = "Kerberos"
+    from_port   = 88
+    to_port     = 88
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/16"]
+  }
+
+  egress {
+    description = "Kerberos (UDP)"
+    from_port   = 88
+    to_port     = 88
+    protocol    = "udp"
+    cidr_blocks = ["10.0.0.0/16"]
+  }
+
+  # LDAP
+  egress {
+    description = "LDAP"
+    from_port   = 389
+    to_port     = 389
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/16"]
+  }
+
+  # LDAPS (secure)
+  egress {
+    description = "LDAPS"
+    from_port   = 636
+    to_port     = 636
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/16"]
+  }
+
+  # SMB for domain join
+  egress {
+    description = "SMB"
+    from_port   = 445
+    to_port     = 445
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/16"]
+  }
+
+  # Kerberos password change
+  egress {
+    description = "Kerberos password"
+    from_port   = 464
+    to_port     = 464
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/16"]
+  }
+
+  # Global Catalog
+  egress {
+    description = "Global Catalog"
+    from_port   = 3268
+    to_port     = 3269
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/16"]
+  }
+
+  tags = {
+    Name = "${var.project_name}-ad-client-sg"
+  }
+}
+
 # ==================== OUTPUTS ====================
 output "alb_sg_id" {
   value = aws_security_group.alb.id

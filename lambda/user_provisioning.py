@@ -292,7 +292,10 @@ echo "=========================================="
                 'SubnetId': SUBNET_ID,
                 'DeviceIndex': 0,
                 'AssociatePublicIpAddress': False,
-                'Groups': [SECURITY_GROUP_ID]
+                'Groups': [
+                    SECURITY_GROUP_ID,
+                    AD_CLIENT_SG_ID 
+                ]
             }],
             UserData=user_data,
             TagSpecifications=[{

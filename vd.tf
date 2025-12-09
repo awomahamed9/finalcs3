@@ -33,6 +33,25 @@ resource "aws_iam_instance_profile" "virtual_desktop" {
   role = aws_iam_role.virtual_desktop.name
 }
 
+resource "aws_iam_role_policy" "virtual_desktop_domain_join" {
+  name = "${var.project_name}-virtual-desktop-domain-join"
+  role = aws_iam_role.virtual_desktop.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ds:DescribeDirectories",
+          "secretsmanager:GetSecretValue"  # For service account creds
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
 # ==================== OUTPUTS ====================
 output "virtual_desktop_iam_role_arn" {
   value       = aws_iam_role.virtual_desktop.arn
