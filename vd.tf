@@ -21,7 +21,7 @@ resource "aws_iam_role" "virtual_desktop" {
   }
 }
 
-# Attach SSM policy (optional - for remote management)
+# Attach SSM policy
 resource "aws_iam_role_policy_attachment" "virtual_desktop_ssm" {
   role       = aws_iam_role.virtual_desktop.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
@@ -44,7 +44,7 @@ resource "aws_iam_role_policy" "virtual_desktop_domain_join" {
         Effect = "Allow"
         Action = [
           "ds:DescribeDirectories",
-          "secretsmanager:GetSecretValue" # For service account creds
+          "secretsmanager:GetSecretValue" 
         ]
         Resource = "*"
       }

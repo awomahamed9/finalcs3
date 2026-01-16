@@ -12,7 +12,7 @@ variable "hr_admin_password" {
   sensitive   = true
 }
 
-# ==================== ECR REPOSITORY ====================
+# ECR REPOSITORY 
 resource "aws_ecr_repository" "hr_portal" {
   name                 = "${var.project_name}-hr-portal"
   image_tag_mutability = "MUTABLE"
@@ -28,7 +28,7 @@ resource "aws_ecr_repository" "hr_portal" {
   }
 }
 
-# ==================== ECS CLUSTER ====================
+# ECS CLUSTER 
 resource "aws_ecs_cluster" "main" {
   name = "${var.project_name}-cluster"
 
@@ -42,7 +42,7 @@ resource "aws_ecs_cluster" "main" {
   }
 }
 
-# ==================== CLOUDWATCH LOG GROUP ====================
+# CLOUDWATCH LOG GROUP 
 resource "aws_cloudwatch_log_group" "hr_portal" {
   name              = "/ecs/${var.project_name}-hr-portal"
   retention_in_days = 7
@@ -52,7 +52,7 @@ resource "aws_cloudwatch_log_group" "hr_portal" {
   }
 }
 
-# ==================== IAM ROLE FOR ECS TASK EXECUTION ====================
+# IAM ROLE FOR ECS TASK EXECUTION 
 resource "aws_iam_role" "ecs_task_execution" {
   name = "${var.project_name}-ecs-task-execution-role"
 
@@ -80,7 +80,7 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-# ==================== IAM ROLE FOR ECS TASK (APPLICATION) ====================
+# IAM ROLE FOR ECS TASK APPLICATION
 resource "aws_iam_role" "ecs_task" {
   name = "${var.project_name}-ecs-task-role"
 
@@ -131,8 +131,8 @@ resource "aws_ecs_task_definition" "hr_portal" {
   family                   = "${var.project_name}-hr-portal"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
-  cpu                      = "256" # 0.25 vCPU
-  memory                   = "512" # 512 MB
+  cpu                      = "256" 
+  memory                   = "512" 
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
   task_role_arn            = aws_iam_role.ecs_task.arn
 

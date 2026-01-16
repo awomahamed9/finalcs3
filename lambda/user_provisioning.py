@@ -62,7 +62,7 @@ def lambda_handler(event, context):
                     }),
                     Subject=f'Create AD User: {username}'
                 )
-                print(f"✅ Published to SNS for {username}")
+                print(f"Published to SNS for {username}")
                 
                 # Launch Windows virtual desktop
                 instance_id, private_ip = launch_windows_desktop(
@@ -72,7 +72,7 @@ def lambda_handler(event, context):
                 if not instance_id:
                     raise Exception(f"Failed to launch Windows desktop for {username}")
                 
-                print(f"✅ Launched Windows desktop: {instance_id} ({private_ip})")
+                print(f" Launched Windows desktop: {instance_id} ({private_ip})")
                 
                 # Send credentials email
                 send_credentials_email(name, email, username, password, private_ip, role)
@@ -114,19 +114,18 @@ def generate_password(length=12):
 def launch_windows_desktop(employee_id, name, username, department, role):
     """Launch Windows domain-joined virtual desktop with RBAC and Fixes"""
     try:
-        # PowerShell user-data script
-        # Includes ALL previous fixes (DNS, NLA, Retry Loops) + New RBAC Logic
+        
         user_data_script = f"""<powershell>
 Start-Transcript -Path "C:\\ProgramData\\Amazon\\EC2Launch\\log\\user-data-transcript.log"
 
 Write-Host "=== Starting Windows Desktop Setup for {username} ==="
 
-# 1. FIX: Configure DNS (Crucial for Domain Join)
+# 1.  Configure DNS (Crucial for Domain Join)
 $adapter = Get-NetAdapter | Where-Object {{ $_.Status -eq "Up" }} | Select-Object -First 1
 Set-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -ServerAddresses "10.0.11.44","10.0.12.42"
 Write-Host "DNS Configured"
 
-# 2. FIX: Wait for AD Connectivity
+# 2.  Wait for AD Connectivity
 $ready = $false
 for ($i=1; $i -le 30; $i++) {{
     if (Test-NetConnection -ComputerName 10.0.11.44 -Port 389 -InformationLevel Quiet) {{
@@ -145,7 +144,7 @@ if ($ready) {{
         # A. Join Domain
         Add-Computer -DomainName "innovatech.local" -Credential $credential -Force
         
-        # --- RBAC & REALISM LOGIC ---
+        # RBAC 
         Write-Host "Applying Department Policy: {department}"
         
         # General: Create Info folder for everyone
@@ -186,10 +185,10 @@ if ($ready) {{
         }}
         # ---------------------------
 
-        # B. FIX: Disable NLA (Fixes 0x2407 error)
+        # to Disable NLA 
         (Get-WmiObject -class "Win32_TSGeneralSetting" -Namespace root\\cimv2\\terminalservices -Filter "TerminalName='RDP-tcp'").SetUserAuthenticationRequired(0)
 
-        # C. FIX: Grant RDP Access (Retry loop)
+        # Grant RDP Access to domain users
         for ($k=1; $k -le 5; $k++) {{
             try {{
                 Add-LocalGroupMember -Group "Remote Desktop Users" -Member "innovatech\\Domain Users" -ErrorAction Stop
@@ -212,7 +211,7 @@ Stop-Transcript
 </powershell>
 <persist>true</persist>
 """
-        # FIX: Base64 Encode (Required for Windows)
+        #  Base64 Encode this is required for Windows
         encoded_user_data = base64.b64encode(user_data_script.encode("ascii")).decode("ascii")
 
         # Get AMI
@@ -337,7 +336,7 @@ body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
     </div>
     
     <div class="warning">
-      <strong>⚠️ Important:</strong> Your Windows desktop takes 10-15 minutes to boot and join the domain. Please wait before connecting.
+      <strong>Important:</strong> Your Windows desktop takes 10-15 minutes to boot and join the domain. Please wait before connecting.
     </div>
     
     <h3>How to Connect:</h3>
@@ -413,7 +412,7 @@ Innovatech IT Team
             }
         )
         
-        print(f"✅ Email sent to {email}")
+        print(f" Email sent to {email}")
         return True
         
     except Exception as e:
@@ -456,3 +455,6 @@ def update_employee_status(employee_id, processed=True, instance_id=None, privat
     except Exception as e:
         print(f"Update error: {str(e)}")
         return False
+
+
+        

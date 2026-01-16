@@ -29,7 +29,7 @@ $secret = $secretJson.SecretString | ConvertFrom-Json
 $password = ConvertTo-SecureString $secret.password -AsPlainText -Force
 $credential = New-Object System.Management.Automation.PSCredential("Admin@${directory_name}", $password)
 
-# Wait for AD to be fully available (may take 20+ minutes after creation)
+# Wait for AD to be fully available before joining domain
 Write-Host "Waiting for AD to be ready..."
 $maxAttempts = 60
 $attempt = 0

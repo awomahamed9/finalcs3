@@ -106,7 +106,7 @@ resource "aws_security_group" "ad_automation" {
   }
 }
 
-# SNS Topic for Lambda → Windows Communication
+# SNS Topic for Lambda to Windows Communication
 resource "aws_sns_topic" "ad_user_provisioning" {
   name = "${var.project_name}-ad-user-provisioning"
 
@@ -115,11 +115,11 @@ resource "aws_sns_topic" "ad_user_provisioning" {
   }
 }
 
-# SQS Queue for SNS messages (Windows will poll this)
+# SQS Queue for SNS messages and this is what Windows will poll
 resource "aws_sqs_queue" "ad_user_provisioning" {
   name                       = "${var.project_name}-ad-user-provisioning-queue"
   visibility_timeout_seconds = 300
-  message_retention_seconds  = 86400 # 24 hours
+  message_retention_seconds  = 86400 
 
   tags = {
     Name = "${var.project_name}-ad-user-provisioning-queue"
@@ -133,7 +133,7 @@ resource "aws_sns_topic_subscription" "ad_user_provisioning" {
   endpoint  = aws_sqs_queue.ad_user_provisioning.arn
 }
 
-# SQS Queue Policy (allow SNS to send messages)
+# SQS Queue Policy so this will allow SNS to send messages to sqs
 resource "aws_sqs_queue_policy" "ad_user_provisioning" {
   queue_url = aws_sqs_queue.ad_user_provisioning.id
 
@@ -168,7 +168,7 @@ resource "aws_instance" "ad_automation" {
 
   iam_instance_profile = aws_iam_instance_profile.ad_automation.name
 
-  # Domain join will happen manually after AD is ready
+ 
   user_data = base64encode(templatefile("${path.module}/scripts/ad_automation_userdata.ps1", {
     directory_id   = aws_directory_service_directory.main.id
     directory_name = aws_directory_service_directory.main.name

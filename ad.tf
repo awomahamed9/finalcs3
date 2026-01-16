@@ -22,7 +22,7 @@ resource "aws_secretsmanager_secret_version" "ad_admin" {
 resource "aws_directory_service_directory" "main" {
   name     = "innovatech.local"
   password = var.ad_admin_password
-  edition  = "Standard" # Standard is cheaper for testing
+  edition  = "Standard" 
   type     = "MicrosoftAD"
 
   vpc_settings {

@@ -5,12 +5,11 @@ variable "ses_sender_email" {
   default     = "549500@student.fontys.nl"
 }
 
-# ==================== SES EMAIL IDENTITY ====================
 resource "aws_ses_email_identity" "sender" {
   email = var.ses_sender_email
 }
 
-# ==================== IAM ROLE FOR LAMBDA ====================
+
 resource "aws_iam_role" "lambda_provisioning" {
   name = "${var.project_name}-lambda-provisioning-role"
 
@@ -93,12 +92,12 @@ resource "aws_iam_role_policy" "lambda_permissions" {
         Resource = "*"
       },
 
-      # Add to la.tf in aws_iam_role_policy
+    
       {
         Effect = "Allow"
         Action = [
           "ds:DescribeDirectories",
-          "ssm:SendCommand", # If using SSM for domain join
+          "ssm:SendCommand", 
           "ssm:GetCommandInvocation"
         ]
         Resource = "*"
@@ -168,7 +167,7 @@ resource "aws_lambda_function" "user_provisioning" {
   handler          = "user_provisioning.lambda_handler"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
   runtime          = "python3.11"
-  timeout          = 300 # 5 minutes
+  timeout          = 300 
   memory_size      = 256
 
   vpc_config {
@@ -196,7 +195,7 @@ resource "aws_lambda_function" "user_provisioning" {
   }
 }
 
-# ==================== DYNAMODB STREAM TRIGGER ====================
+# DYNAMODB STREAM TRIGGER
 resource "aws_lambda_event_source_mapping" "dynamodb_stream" {
   event_source_arn  = aws_dynamodb_table.employees.stream_arn
   function_name     = aws_lambda_function.user_provisioning.arn
@@ -223,7 +222,7 @@ resource "aws_lambda_event_source_mapping" "dynamodb_stream" {
   ]
 }
 
-# ==================== CLOUDWATCH LOG GROUP ====================
+# CLOUDWATCH LOG GROUP
 resource "aws_cloudwatch_log_group" "lambda" {
   name              = "/aws/lambda/${aws_lambda_function.user_provisioning.function_name}"
   retention_in_days = 7
@@ -233,7 +232,7 @@ resource "aws_cloudwatch_log_group" "lambda" {
   }
 }
 
-# ==================== OUTPUTS ====================
+# OUTPUTS 
 output "lambda_function_name" {
   value = aws_lambda_function.user_provisioning.function_name
 }

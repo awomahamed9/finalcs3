@@ -6,7 +6,7 @@ resource "aws_lb_target_group" "hr_portal" {
   port        = 3000
   protocol    = "HTTP"
   vpc_id      = aws_vpc.main.id
-  target_type = "ip" # Required for Fargate
+  target_type = "ip" 
 
   health_check {
     enabled             = true
@@ -43,7 +43,7 @@ resource "aws_lb" "main" {
   }
 }
 
-# HTTP Listener (port 80)
+# HTTP Listener on port 80
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
